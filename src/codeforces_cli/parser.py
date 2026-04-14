@@ -195,7 +195,10 @@ def parse_csrf_token(html: str) -> str | None:
 
 
 def parse_submission_verdict(html: str) -> list[dict]:
-    """Parse recent submissions from user's submission page."""
+    """Parse submissions from status table.
+
+    Column layout: [0]ID [1]Time [2]Author [3]Problem [4]Language [5]Verdict [6]Time [7]Memory
+    """
     soup = BeautifulSoup(html, "lxml")
     table = soup.find("table", class_="status-frame-datatable")
     if not table:
@@ -204,14 +207,13 @@ def parse_submission_verdict(html: str) -> list[dict]:
     submissions = []
     for tr in table.find_all("tr")[1:]:
         cells = tr.find_all("td")
-        if len(cells) < 6:
+        if len(cells) < 8:
             continue
         sub_id = cells[0].get_text(strip=True)
         problem = cells[3].get_text(strip=True)
-        verdict_cell = cells[4]
-        verdict = verdict_cell.get_text(strip=True)
-        time_val = cells[5].get_text(strip=True) if len(cells) > 5 else ""
-        memory_val = cells[6].get_text(strip=True) if len(cells) > 6 else ""
+        verdict = cells[5].get_text(strip=True)
+        time_val = cells[6].get_text(strip=True)
+        memory_val = cells[7].get_text(strip=True)
         submissions.append({
             "id": sub_id,
             "problem": problem,

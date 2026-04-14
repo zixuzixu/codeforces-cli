@@ -84,8 +84,11 @@ class CodeforcesClient:
         resp = self._get(f"/contest/{contest_id}/standings")
         return parse_standings(resp.text)
 
-    def get_status(self) -> list[dict]:
-        resp = self._get("/submissions/my")
+    def get_status(self, contest_id: str | None = None) -> list[dict]:
+        if contest_id:
+            resp = self._get(f"/contest/{contest_id}/my")
+        else:
+            resp = self._get("/submissions/my")
         return parse_submission_verdict(resp.text)
 
     def submit(self, contest_id: str, problem_id: str, source_code: str, lang_id: int) -> str:
@@ -123,7 +126,7 @@ class CodeforcesClient:
 
     def get_submission_verdict(self, contest_id: str, submission_id: str) -> dict | None:
         """Poll a specific submission's verdict."""
-        resp = self._get("/submissions/my")
+        resp = self._get(f"/contest/{contest_id}/my")
         verdicts = parse_submission_verdict(resp.text)
         for v in verdicts:
             if v["id"] == submission_id:

@@ -411,8 +411,9 @@ def submit(problem: str | None):
 
 
 @main.command()
-def status():
-    """Show recent submission verdicts."""
+@click.argument("contest_id", required=False)
+def status(contest_id: str | None):
+    """Show recent submission verdicts. Optionally filter by contest ID."""
     _, client = get_client()
 
     if not client.is_logged_in():
@@ -420,7 +421,7 @@ def status():
         raise SystemExit(1)
 
     with console.status("Fetching submissions..."):
-        subs = client.get_status()
+        subs = client.get_status(contest_id)
 
     if not subs:
         console.print("[yellow]No submissions found.[/yellow]")
