@@ -235,6 +235,10 @@ def test_cmd(problem: str | None):
             work_dir=problem_dir,
         )
 
+        # Save actual output to ans{num}.txt
+        ans_file = problem_dir / f"ans{num}.txt"
+        ans_file.write_text(result.stdout)
+
         if result.timed_out:
             console.print(f"[red]Test {num}: TLE (>{config.test_timeout}s)[/red]")
         elif result.returncode != 0:
@@ -316,6 +320,10 @@ def run(problem: str | None):
             work_dir=problem_dir,
         )
 
+        # Save actual output to ans{num}.txt
+        ans_file = problem_dir / f"ans{num}.txt"
+        ans_file.write_text(result.stdout)
+
         if result.timed_out:
             console.print(f"[red]TLE (>{config.test_timeout}s)[/red]")
         elif result.returncode != 0:
@@ -330,6 +338,7 @@ def run(problem: str | None):
                     console.print(f"[green]>>> PASS[/green]")
                 else:
                     console.print(f"[red]>>> FAIL[/red]")
+        console.print(f"[dim]Saved to {ans_file.name}[/dim]")
         console.print()
 
 
