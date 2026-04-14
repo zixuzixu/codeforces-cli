@@ -48,26 +48,50 @@ def parse_contest_problems(html: str) -> list[dict]:
 
 
 def parse_contest_list(html: str) -> list[dict]:
-    """Parse contest list from /contests page."""
-    soup = BeautifulSoup(html, "lxml")
-    rows = []
-    table = soup.find("div", class_="datatable")
-    if not table:
-        return rows
+    """Parse contest list from /contests page.
 
-    for tr in table.find_all("tr")[1:]:
-        cells = tr.find_all("td")
-        if len(cells) < 2:
-            continue
-        name = cells[0].get_text(strip=True)
-        time_str = cells[1].get_text(strip=True) if len(cells) > 1 else ""
-        contest_id = ""
-        link = cells[0].find("a")
-        if link and link.get("href"):
-            parts = link["href"].strip("/").split("/")
-            if len(parts) >= 2:
-                contest_id = parts[-1]
-        rows.append({"id": contest_id, "name": name, "time": time_str})
+    The page has multiple datatables:
+    - Table 0: upcoming contests (no links in name cell)
+    - Table 1: past contests (links with /contest/<id> in name cell)
+    """
+    soup = BeautifulSoup(html, "lxml")
+    tables = soup.find_all("div", class_="datatable")
+    rows = []
+
+    for table in tables:
+        for tr in table.find_all("tr")[1:]:
+            cells = tr.find_all("td")
+            if len(cells) < 4:
+                continue
+
+            # Extract contest name — it's text before the first <a> tag
+            name_cell = cells[0]
+            name = ""
+            for child in name_cell.children:
+                if hasattr(child, "name") and child.name == "a":
+                    break
+                text = child.get_text(strip=True) if hasattr(child, "get_text") else str(child).strip()
+                if text:
+                    name = text
+                    break
+            if not name:
+                name = name_cell.get_text(strip=True)
+
+            # Extract contest ID from first link href
+            contest_id = ""
+            name_link = name_cell.find("a")
+            if name_link and name_link.get("href"):
+                parts = name_link["href"].strip("/").split("/")
+                if "contest" in parts:
+                    idx = parts.index("contest")
+                    if idx + 1 < len(parts):
+                        contest_id = parts[idx + 1]
+
+            # Time is in cells[2] (cells[1] is writers)
+            time_str = cells[2].get_text(strip=True) if len(cells) > 2 else ""
+
+            rows.append({"id": contest_id, "name": name, "time": time_str})
+
     return rows
 
 

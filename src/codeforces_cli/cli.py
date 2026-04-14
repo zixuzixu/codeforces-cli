@@ -29,18 +29,30 @@ def main():
 
 @main.command()
 def login():
-    """Login to Codeforces."""
-    config, client = get_client()
-    username = click.prompt("Username/Email")
-    password = click.prompt("Password", hide_input=True)
+    """Login to Codeforces by importing browser cookies.
 
-    with console.status("Logging in..."):
-        success = client.login(username, password)
+    Steps:
+    1. Open codeforces.com in your browser and log in
+    2. Open DevTools (F12) → Application → Cookies → codeforces.com
+    3. Copy the cookie string (or use DevTools Console: document.cookie)
+    4. Paste it here
+    """
+    config, client = get_client()
+
+    console.print("[bold]Login to Codeforces via browser cookies[/bold]\n")
+    console.print("1. Open [cyan]https://codeforces.com[/cyan] in your browser and log in")
+    console.print("2. Open DevTools (F12) → Console")
+    console.print("3. Run: [cyan]document.cookie[/cyan]")
+    console.print("4. Copy the output and paste below\n")
+
+    cookie_string = click.prompt("Paste cookies")
+
+    success = client.login_with_cookies(cookie_string)
 
     if success:
-        console.print(f"[green]Logged in as {username}[/green]")
+        console.print("[green]Login successful![/green]")
     else:
-        console.print("[red]Login failed. Check your credentials.[/red]")
+        console.print("[red]Login failed. Make sure you're logged in on codeforces.com before copying cookies.[/red]")
         raise SystemExit(1)
 
 

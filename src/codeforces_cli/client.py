@@ -1,4 +1,4 @@
-import requests
+from curl_cffi import requests as cffi_requests
 from codeforces_cli.config import Config
 from codeforces_cli.parser import (
     parse_csrf_token,
@@ -16,45 +16,45 @@ class CodeforcesClient:
     def __init__(self, config: Config):
         self.config = config
         self.base_url = BASE_URL
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "codeforces-cli/0.1.0",
-        })
+        self.session = cffi_requests.Session(impersonate="chrome")
+        # Load saved session cookies
         cookies = config.load_session()
         if cookies:
             for name, value in cookies.items():
-                self.session.cookies.set(name, value)
+                self.session.cookies.set(name, value, domain=".codeforces.com")
 
-    def _get(self, path: str) -> requests.Response:
+    def _get(self, path: str) -> cffi_requests.Response:
         return self.session.get(f"{self.base_url}{path}")
 
-    def _post(self, path: str, data: dict) -> requests.Response:
+    def _post(self, path: str, data: dict) -> cffi_requests.Response:
         return self.session.post(f"{self.base_url}{path}", data=data)
 
     def is_logged_in(self) -> bool:
         resp = self._get("/")
         return "/enter" not in resp.text and "/profile/" in resp.text
 
-    def login(self, username: str, password: str) -> bool:
-        resp = self._get("/enter")
-        csrf = parse_csrf_token(resp.text)
-        if not csrf:
-            raise RuntimeError("Could not find csrf_token on login page")
+    def login_with_cookies(self, cookie_string: str) -> bool:
+        """Login by importing cookies from browser.
 
-        data = {
-            "csrf_token": csrf,
-            "action": "enter",
-            "ftaa": "",
-            "bfaa": "",
-            "handleOrEmail": username,
-            "password": password,
-            "remember": "on",
-        }
-        resp = self._post("/enter", data=data)
+        cookie_string: raw cookie header value from browser DevTools,
+        e.g. "JSESSIONID=abc; cf_clearance=xyz; ..."
+        """
+        # Parse cookie string
+        cookies = {}
+        for pair in cookie_string.split(";"):
+            pair = pair.strip()
+            if "=" in pair:
+                name, value = pair.split("=", 1)
+                cookies[name.strip()] = value.strip()
 
-        if "handle = " in resp.text or "/profile/" in resp.text:
-            cookies_dict = dict(self.session.cookies)
-            self.config.save_session(cookies_dict)
+        # Set cookies on session
+        for name, value in cookies.items():
+            self.session.cookies.set(name, value, domain=".codeforces.com")
+
+        # Verify login
+        resp = self._get("/")
+        if "/enter" not in resp.text and "/profile/" in resp.text:
+            self.config.save_session(cookies)
             return True
         return False
 
@@ -79,11 +79,16 @@ class CodeforcesClient:
         return parse_submission_verdict(resp.text)
 
     def submit(self, contest_id: str, problem_id: str, source_code: str, lang_id: int) -> str:
+        """Submit solution. Returns submission ID."""
         submit_url = f"/contest/{contest_id}/submit"
         resp = self._get(submit_url)
         csrf = parse_csrf_token(resp.text)
         if not csrf:
-            raise RuntimeError("Could not find csrf_token on submit page. Are you logged in?")
+            raise RuntimeError(
+                "Could not find csrf_token on submit page.\n"
+                "This usually means Cloudflare blocked the request.\n"
+                "Try: cf login  (to refresh your session cookies)"
+            )
 
         data = {
             "csrf_token": csrf,
@@ -107,7 +112,8 @@ class CodeforcesClient:
         return ""
 
     def get_submission_verdict(self, contest_id: str, submission_id: str) -> dict | None:
-        resp = self._get(f"/submissions/my")
+        """Poll a specific submission's verdict."""
+        resp = self._get("/submissions/my")
         verdicts = parse_submission_verdict(resp.text)
         for v in verdicts:
             if v["id"] == submission_id:
