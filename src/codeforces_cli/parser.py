@@ -1,4 +1,72 @@
+import re
 from bs4 import BeautifulSoup
+
+
+def parse_problem_statement(html: str) -> str:
+    """Extract problem statement as readable plain text from a problem page."""
+    soup = BeautifulSoup(html, "lxml")
+    stmt = soup.find("div", class_="problem-statement")
+    if not stmt:
+        return ""
+
+    parts = []
+
+    # Header: title, limits
+    header = stmt.find("div", class_="header")
+    if header:
+        title = header.find("div", class_="title")
+        tl = header.find("div", class_="time-limit")
+        ml = header.find("div", class_="memory-limit")
+        if title:
+            parts.append(title.get_text(strip=True))
+        limits = []
+        if tl:
+            limits.append(tl.get_text(strip=True).replace("time limit per test", "Time: "))
+        if ml:
+            limits.append(ml.get_text(strip=True).replace("memory limit per test", "Memory: "))
+        if limits:
+            parts.append(" | ".join(limits))
+        parts.append("")
+
+    # Body sections
+    for div in stmt.find_all("div", recursive=False):
+        cls = div.get("class", [])
+        if "header" in cls or "sample-tests" in cls:
+            continue
+
+        if "input-specification" in cls:
+            parts.append("Input")
+            parts.append("-" * 40)
+        elif "output-specification" in cls:
+            parts.append("Output")
+            parts.append("-" * 40)
+        elif "note" in cls:
+            parts.append("Note")
+            parts.append("-" * 40)
+        elif not cls:
+            # Main problem description
+            parts.append("Description")
+            parts.append("-" * 40)
+
+        text = div.get_text("\n", strip=True)
+        # Clean up LaTeX $$$...$$$
+        text = re.sub(r"\$\$\$([^$]*)\$\$\$", r"\1", text)
+        parts.append(text)
+        parts.append("")
+
+    # Sample tests section
+    samples = parse_sample_tests(html)
+    if samples:
+        parts.append("Examples")
+        parts.append("-" * 40)
+        for i, (inp, out) in enumerate(samples, 1):
+            parts.append(f"Input {i}:")
+            parts.append(inp)
+            parts.append(f"Output {i}:")
+            parts.append(out)
+            parts.append("")
+
+    return "\n".join(parts)
 
 
 def parse_sample_tests(html: str) -> list[tuple[str, str]]:

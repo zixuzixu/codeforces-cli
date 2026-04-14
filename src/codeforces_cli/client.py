@@ -3,6 +3,7 @@ from codeforces_cli.config import Config
 from codeforces_cli.parser import (
     parse_csrf_token,
     parse_sample_tests,
+    parse_problem_statement,
     parse_contest_problems,
     parse_contest_list,
     parse_standings,
@@ -66,9 +67,18 @@ class CodeforcesClient:
         resp = self._get(f"/contest/{contest_id}")
         return parse_contest_problems(resp.text)
 
-    def get_problem_samples(self, contest_id: str, problem_id: str) -> list[tuple[str, str]]:
+    def get_problem_page(self, contest_id: str, problem_id: str) -> str:
+        """Fetch raw HTML for a problem page."""
         resp = self._get(f"/contest/{contest_id}/problem/{problem_id}")
-        return parse_sample_tests(resp.text)
+        return resp.text
+
+    def get_problem_samples(self, contest_id: str, problem_id: str) -> list[tuple[str, str]]:
+        html = self.get_problem_page(contest_id, problem_id)
+        return parse_sample_tests(html)
+
+    def get_problem_statement(self, contest_id: str, problem_id: str) -> str:
+        html = self.get_problem_page(contest_id, problem_id)
+        return parse_problem_statement(html)
 
     def get_standings(self, contest_id: str) -> list[dict]:
         resp = self._get(f"/contest/{contest_id}/standings")

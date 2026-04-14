@@ -103,11 +103,21 @@ def contest_info(contest_id: str):
 
 
 def _download_problem(config: Config, client: CodeforcesClient, contest_id: str, problem_id: str):
-    """Download samples for a single problem and create source template."""
+    """Download problem statement and samples, create source template."""
+    from codeforces_cli.parser import parse_sample_tests, parse_problem_statement
+
     problem_dir = config.workspace / contest_id / problem_id
     problem_dir.mkdir(parents=True, exist_ok=True)
 
-    samples = client.get_problem_samples(contest_id, problem_id)
+    # Fetch page once, extract both statement and samples
+    html = client.get_problem_page(contest_id, problem_id)
+    samples = parse_sample_tests(html)
+    statement = parse_problem_statement(html)
+
+    # Save problem statement
+    if statement:
+        (problem_dir / "problem.txt").write_text(statement)
+
     if not samples:
         console.print(f"  [yellow]{problem_id}: no samples found[/yellow]")
         return
@@ -124,7 +134,7 @@ def _download_problem(config: Config, client: CodeforcesClient, contest_id: str,
         template = config.get_template(ext)
         src_file.write_text(template)
 
-    console.print(f"  [green]{problem_id}: {len(samples)} sample(s)[/green]")
+    console.print(f"  [green]{problem_id}: {len(samples)} sample(s) + problem statement[/green]")
 
 
 @main.command()
@@ -239,6 +249,88 @@ def test_cmd(problem: str | None):
 
     color = "green" if passed == total else "red"
     console.print(f"\n[{color}]{passed}/{total} passed[/{color}]")
+
+
+@main.command()
+@click.argument("problem", required=False)
+def run(problem: str | None):
+    """Compile and run solution, feeding each test case input and showing output."""
+    config, _ = get_client()
+
+    if problem:
+        contest_id, problem_id = parse_problem_arg(problem)
+        problem_dir = config.workspace / contest_id / problem_id
+    else:
+        cwd = Path.cwd()
+        contest_id, problem_id = detect_problem_from_cwd(cwd, config.workspace)
+        if not contest_id:
+            console.print("[red]Cannot detect problem. Pass as argument or cd into problem directory.[/red]")
+            raise SystemExit(1)
+        problem_dir = cwd
+
+    if not problem_dir.exists():
+        console.print(f"[red]Directory {problem_dir} not found. Run cf download first.[/red]")
+        raise SystemExit(1)
+
+    source = find_source_file(problem_dir, config.default_language)
+    if not source:
+        console.print(f"[red]No source file found in {problem_dir}[/red]")
+        raise SystemExit(1)
+
+    ext = source.suffix
+    lang = config.languages.get(ext)
+    if not lang:
+        console.print(f"[red]Unsupported language: {ext}[/red]")
+        raise SystemExit(1)
+
+    # Compile
+    console.print(f"[cyan]Compiling {source.name}...[/cyan]")
+    ok, msg = compile_source(source, lang.get("compile"), problem_dir)
+    if not ok:
+        console.print(f"[red]Compilation failed:[/red]\n{msg}")
+        raise SystemExit(1)
+    console.print("[green]Compiled OK[/green]\n")
+
+    # Find and run each test case
+    test_inputs = sorted(problem_dir.glob("in*.txt"))
+    if not test_inputs:
+        console.print("[yellow]No test cases found.[/yellow]")
+        return
+
+    for in_file in test_inputs:
+        num = in_file.stem.replace("in", "")
+        out_file = problem_dir / f"out{num}.txt"
+        input_data = in_file.read_text()
+        expected = out_file.read_text().strip() if out_file.exists() else None
+
+        console.print(f"[bold]━━━ Test {num} ━━━[/bold]")
+        console.print(f"[dim]Input:[/dim]")
+        console.print(input_data.rstrip())
+
+        result = run_test(
+            source=source,
+            input_data=input_data,
+            compile_cmd=None,
+            run_cmd=lang["run"],
+            timeout=config.test_timeout,
+            work_dir=problem_dir,
+        )
+
+        if result.timed_out:
+            console.print(f"[red]TLE (>{config.test_timeout}s)[/red]")
+        elif result.returncode != 0:
+            console.print(f"[red]Runtime Error[/red]\n{result.stderr}")
+        else:
+            console.print(f"[dim]Output:[/dim]")
+            console.print(result.stdout.rstrip())
+            if expected is not None:
+                console.print(f"[dim]Expected:[/dim]")
+                console.print(expected)
+                if compare_output(result.stdout, expected):
+                    console.print(f"[green]>>> PASS[/green]")
+                else:
+                    console.print(f"[red]>>> FAIL[/red]")
+        console.print()
 
 
 @main.command()
