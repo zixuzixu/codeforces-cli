@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codeforces-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "CLI tool for interacting with Codeforces"
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.0",
-    "curl_cffi>=0.9",
+    "nodriver>=0.38",
     "beautifulsoup4>=4.12",
     "lxml>=4.9",
     "rich>=13.0",
